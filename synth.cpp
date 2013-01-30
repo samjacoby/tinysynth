@@ -18,6 +18,11 @@ void synth_start_note(uint8_t note) {
     next_note = note;
 }
 
+void synth_stop_note(uint8_t note) {
+
+    
+}
+
 static volatile uint8_t carrier_inc;
 static volatile uint8_t carrier_pos = 0;
 static volatile uint8_t amplitude = 0xff;
@@ -34,7 +39,6 @@ void synth_generate(uint8_t note) {
 }
 
 ISR(TIM1_COMPA_vect) {
-    PORTB ^= (1 << PB3);
     synth_generate(next_note); 
     OCR0A = next_sample;
 }
