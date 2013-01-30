@@ -4,7 +4,7 @@ import math
 
 p_bin = lambda x: int(pow(2, x))
 
-tablebits = 8
+tablebits = 10
 tableres = 8
 tablesize = p_bin(tablebits) 
 
