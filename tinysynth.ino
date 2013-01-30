@@ -7,6 +7,7 @@
 //      pb4:4 -+   +- 1:pb1
 //            -+---+- 0:pb0 (OC0A)
 
+byte touchPins[] = {PB2, PB1, PB4};
 void setup(void) {
     audio_init();
     synth_init();
@@ -14,14 +15,22 @@ void setup(void) {
     // led
     DDRB |= (1 << PB3);
 
-
+    // pins
+    for(byte i = 0; i < sizeof(touchPins); i++) {
+        DDRB |= 1 << touchPins[i];
+    }
 }
+
+
+
 void loop(void) {
     //byte time = chargeTime(2);
-    for(int i=1; i < 0x0f; i++) {
-    synth_start_note(i);
-    delay(60000);
+    for(int i=1; i < 0x2f; i++) {
+        synth_start_note(i);
+        delay(60000);
     }
+
+
 }
 
 
@@ -35,7 +44,8 @@ void audio_init(void) {
 byte chargeTime(byte pin) {
 
   byte mask, i;
-  mask = digitalPinToBitMask(pin);
+  //mask = digitalPinToBitMask(pin);
+  mask = 1 << pin;
 
   DDRB &= ~mask; // input
   PORTB |= mask; // pull-up on
