@@ -1,6 +1,5 @@
 #include <avr/io.h>
 #include "synth.h"
-#include <SoftwareSerial.h>
 #define nop()  __asm__ __volatile__("nop")
 
 //                        attiny45
@@ -8,55 +7,63 @@
 //      pb3:3 -+   +- 2:pb2
 //      pb4:4 -+   +- 1:pb1
 //            -+---+- 0:pb0 (OC0A)
+]
+#define NUM_CHANNELS 3
+#define NUM_SENSE 3
+#define SAMPLES 16
 
-#define NUM_CHANNELS 1
-#define NUM_SENSE 1
+byte touchPins[] = { PB4, PB2, PB1};
 
-
-byte touchPins[] = {PB4};
-
-SoftwareSerial serial(PB2, PB1);
+#ifdef SERIALON
+#include <SoftwareSerial.h>
+SoftwareSerial Serial(PB2, PB1);
+#endif
 
 typedef struct {
     uint8_t pin;
+    uint8_t active;
     uint16_t calibration;
 } sense_t; 
 
 sense_t sensors[NUM_SENSE];
 
+#ifdef SERIALON
 void serial_init() {
 
     DDRB |= (1 << PB2) | (1 << PB1);
-    serial.begin(4800);
+    Serial.begin(4800);
 
 }
+#endif
 
 void setup(void) {
-      audio_init();
-      synth_init();
-      serial_init();
+    audio_init();
+    synth_init();
+    #ifdef SERIALON
+    serial_init();
+    #endif
 
-      // led
-      DDRB |= (1 << PB3);
+    // led
+    DDRB |= (1 << PB3);
 
-      // pins
-      for(byte i=0; i < sizeof(touchPins); i++) {
-          DDRB |= 1 << touchPins[i];
-      }
+    // pins
+    for(byte i=0; i < sizeof(touchPins); i++) {
+        DDRB |= 1 << touchPins[i];
+    }
 
-      for(byte i=0; i < NUM_SENSE; i++) {
+    for(byte i=0; i < NUM_SENSE; i++) {
             sensors[i].pin = touchPins[i];
-            sensors[i].calibration = sampleChargeTime(sensors[i].pin, 4);        
-      }
+            sensors[i].active = 0; 
+            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 2;        
+    }
 
-      PORTB |= (1 << PB3);
-      delay(60000);
-      PORTB &= ~(1 << PB3);
-      delay(60000);
-      PORTB |= (1 << PB3);
-      delay(60000);
-      PORTB &= ~(1 << PB3);
+    PORTB |= (1 << PB3);
+    delay(60000);
+    PORTB &= ~(1 << PB3);
+    delay(60000);
+    PORTB |= (1 << PB3);
 }
+
 /* not for now
 typedef struct {
       uint8_t carrier_inc;
@@ -68,18 +75,29 @@ typedef struct {
 channel_t channels[NUM_CHANNELS];
 */
 
-byte notes[] = {10, 20, 30};
+byte notes[] = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
+
+uint8_t notes_i = 0;
+uint8_t notes_mask = 27;
+
 void loop(void) {
     uint16_t n;
     for(int i=0; i<NUM_SENSE; i++) {
-        n = sampleChargeTime(sensors[i].pin, 4);
+        n = sampleChargeTime(sensors[i].pin, SAMPLES);
+        #ifdef SERIALON
+        Serial.println(n);
+        #endif
         if(n > sensors[i].calibration) {
             PORTB |= 1 << PB3;
-        } else {
+            sensors[i].active = 1;
+            synth_start_note(notes[notes_i]);
+        } else if(sensors[i].active) {
             PORTB &= ~(1 << PB3);
+            sensors[i].active = 0;
+            synth_stop_note();
+            notes_i = (notes_i + 1) & notes_mask;
         }
     }
-    delay(100);
 }
 
 
@@ -95,8 +113,6 @@ uint16_t sampleChargeTime(byte pin, uint8_t samples) {
     uint16_t sum = 0;
     for(int i=0; i<samples; i++) {
         val = chargeTime(pin);
-        serial.println(val);
-        delay(1000);
         sum += ((prev_val * 7) + val) >> 3;
         prev_val = val;
     }
@@ -121,5 +137,3 @@ byte chargeTime(byte pin) {
 
     return i;
 }
-
-

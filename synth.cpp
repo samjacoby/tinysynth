@@ -18,9 +18,8 @@ void synth_start_note(uint8_t note) {
     next_note = note;
 }
 
-void synth_stop_note(uint8_t note) {
-
-    
+void synth_stop_note(void) {
+    next_note = 0;
 }
 
 static volatile uint8_t carrier_inc;

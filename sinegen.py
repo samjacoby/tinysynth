@@ -4,7 +4,7 @@ import math
 
 p_bin = lambda x: int(pow(2, x))
 
-tablebits = 10
+tablebits = 8
 tableres = 8
 tablesize = p_bin(tablebits) 
 
@@ -50,5 +50,5 @@ for i in xrange(tablesize):
     else:
         c.write("%d\n" % int(v))
 
-c.write("};\n\n")
+c.write("}; // %d\n\n" % tablesize)
 c.close()
