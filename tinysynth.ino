@@ -7,12 +7,14 @@
 //      pb3:3 -+   +- 2:pb2
 //      pb4:4 -+   +- 1:pb1
 //            -+---+- 0:pb0 (OC0A)
-]
-#define NUM_CHANNELS 3
+//#define NUM_CHANNELS 3
+//#define SERIALON
+
 #define NUM_SENSE 3
 #define SAMPLES 16
+#define TIMEOUT 10000
 
-byte touchPins[] = { PB4, PB2, PB1};
+byte touchPins[] = { PB1, PB2, PB4};
 
 #ifdef SERIALON
 #include <SoftwareSerial.h>
@@ -22,6 +24,7 @@ SoftwareSerial Serial(PB2, PB1);
 typedef struct {
     uint8_t pin;
     uint8_t active;
+    uint8_t shift;
     uint16_t calibration;
 } sense_t; 
 
@@ -54,7 +57,8 @@ void setup(void) {
     for(byte i=0; i < NUM_SENSE; i++) {
             sensors[i].pin = touchPins[i];
             sensors[i].active = 0; 
-            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 2;        
+            sensors[i].shift = i << 3; // multiply by eight 
+            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 1;        
     }
 
     PORTB |= (1 << PB3);
@@ -62,6 +66,8 @@ void setup(void) {
     PORTB &= ~(1 << PB3);
     delay(60000);
     PORTB |= (1 << PB3);
+
+    synth_amplitude(0xff);
 }
 
 /* not for now
@@ -75,10 +81,10 @@ typedef struct {
 channel_t channels[NUM_CHANNELS];
 */
 
-byte notes[] = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
+byte notes[] = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33};
 
 uint8_t notes_i = 0;
-uint8_t notes_mask = 27;
+uint8_t notes_mask = 7;
 
 void loop(void) {
     uint16_t n;
@@ -87,10 +93,10 @@ void loop(void) {
         #ifdef SERIALON
         Serial.println(n);
         #endif
-        if(n > sensors[i].calibration) {
+        if(n > (sensors[i].calibration)) {
             PORTB |= 1 << PB3;
             sensors[i].active = 1;
-            synth_start_note(notes[notes_i]);
+            synth_start_note(notes[notes_i + sensors[i].shift]);
         } else if(sensors[i].active) {
             PORTB &= ~(1 << PB3);
             sensors[i].active = 0;

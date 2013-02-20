@@ -10,5 +10,6 @@ void synth_disable(void);
 void synth_start_note(uint8_t note); 
 void synth_stop_note(void); 
 void synth_generate(uint8_t note);
+void synth_amplitude(uint8_t amplitude);
 
 #endif // __synth_h_
