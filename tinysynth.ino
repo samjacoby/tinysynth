@@ -12,9 +12,9 @@
 
 #define NUM_SENSE 3
 #define SAMPLES 16
-#define TIMEOUT 10000
+#define TIMEOUT 20000
 
-byte touchPins[] = { PB1, PB2, PB4};
+byte touchPins[] = { PB4, PB2, PB1};
 
 #ifdef SERIALON
 #include <SoftwareSerial.h>
@@ -26,6 +26,7 @@ typedef struct {
     uint8_t active;
     uint8_t shift;
     uint16_t calibration;
+    uint16_t trigger;
 } sense_t; 
 
 sense_t sensors[NUM_SENSE];
@@ -38,6 +39,15 @@ void serial_init() {
 
 }
 #endif
+
+
+void sensors_calibrate(void) {
+
+    for(byte i=0; i < NUM_SENSE; i++) {
+        sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 2;        
+    }
+
+}
 
 void setup(void) {
     audio_init();
@@ -54,7 +64,8 @@ void setup(void) {
             sensors[i].pin = touchPins[i];
             sensors[i].active = 0; 
             sensors[i].shift = i << 3; // multiply by eight 
-            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 1;        
+            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 2;        
+            sensors[i].trigger = 0; 
     }
 
     PORTB |= (1 << PB3);
@@ -77,7 +88,7 @@ typedef struct {
 channel_t channels[NUM_CHANNELS];
 */
 
-byte notes[] = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33};
+byte notes[] = {10, 14, 18, 22, 26, 30, 34, 38, 130, 140, 150, 160, 170, 180, 190, 200, 42, 45, 47, 50, 58, 69, 81, 86, 90, 95, 98, 102, 110};
 
 uint8_t notes_i = 0;
 uint8_t notes_mask = 7;
@@ -89,15 +100,21 @@ void loop(void) {
         #ifdef SERIALON
         Serial.println(n);
         #endif
-        if(n > (sensors[i].calibration)) {
-            PORTB |= 1 << PB3;
-            sensors[i].active = 1;
-            synth_start_note(notes[notes_i + sensors[i].shift]);
+        if(n > sensors[i].calibration) {
+            if(!sensors[i].active) {
+                PORTB |= 1 << PB3;
+                synth_start_note(notes[notes_i + sensors[i].shift]);
+                sensors[i].active = 1;
+            }
         } else if(sensors[i].active) {
             PORTB &= ~(1 << PB3);
-            sensors[i].active = 0;
-            synth_stop_note();
-            notes_i = (notes_i + 1) & notes_mask;
+            sensors[i].trigger++;
+            if(sensors[i].trigger > 5) {
+                synth_stop_note();
+                sensors[i].active = 0;
+                sensors[i].trigger = 0;
+                notes_i = (notes_i + 1) & notes_mask;
+            }
         }
     }
 }

@@ -26,17 +26,20 @@ void synth_start_note(uint8_t note) {
     next_note = note;
 }
 
+
+static volatile uint16_t carrier_inc;
+static volatile uint16_t carrier_pos = 0;
+static volatile uint8_t amplitude = 0xff;
+
+// hack to prevent increment
 void synth_stop_note(void) {
     next_note = 0;
+    carrier_pos = 0;
 }
-
-static volatile uint8_t carrier_inc;
-static volatile uint8_t carrier_pos = 0;
-static volatile uint8_t amplitude = 0xff;
 
 void synth_generate(uint8_t note) {
 
-    uint8_t cpos = 0;
+    uint16_t cpos = 0;
     carrier_inc = note;
     carrier_pos += carrier_inc;
 
