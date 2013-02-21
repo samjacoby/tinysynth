@@ -49,12 +49,8 @@ void setup(void) {
     // led
     DDRB |= (1 << PB3);
 
-    // pins
-    for(byte i=0; i < sizeof(touchPins); i++) {
-        DDRB |= 1 << touchPins[i];
-    }
-
     for(byte i=0; i < NUM_SENSE; i++) {
+            DDRB |= 1 << touchPins[i];
             sensors[i].pin = touchPins[i];
             sensors[i].active = 0; 
             sensors[i].shift = i << 3; // multiply by eight 
