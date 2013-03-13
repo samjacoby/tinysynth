@@ -15,6 +15,7 @@
 #define TIMEOUT 20000
 
 byte touchPins[] = { PB4, PB2, PB1};
+//byte touchPins[] = { PB1};
 
 #ifdef SERIALON
 #include <SoftwareSerial.h>
@@ -51,6 +52,7 @@ void sensors_calibrate(void) {
 
 void setup(void) {
     audio_init();
+    audio_disable();
     synth_init();
     #ifdef SERIALON
     serial_init();
@@ -58,6 +60,7 @@ void setup(void) {
 
     // led
     DDRB |= (1 << PB3);
+    PORTB |= (1 << PB3);
 
     for(byte i=0; i < NUM_SENSE; i++) {
             DDRB |= 1 << touchPins[i];
@@ -68,12 +71,7 @@ void setup(void) {
             sensors[i].trigger = 0; 
     }
 
-    PORTB |= (1 << PB3);
-    delay(60000);
     PORTB &= ~(1 << PB3);
-    delay(60000);
-    PORTB |= (1 << PB3);
-
     synth_amplitude(0xff);
 }
 
@@ -102,20 +100,24 @@ void loop(void) {
         #ifdef SERIALON
         Serial.println(n);
         #endif
-        if(n > sensors[i].calibration) {
-            sensors[i].trigger = 0;
-            if(!sensors[i].active) {
-                PORTB |= 1 << PB3;
-                synth_start_note(notes[notes_i + sensors[i].shift]);
-                sensors[i].active = 1;
-            }
-        } else if(sensors[i].active) {
+        if(n > sensors[i].calibration) { 
+                sensors[i].trigger = 0; 
+                //if(!sensors[i].active) {
+                    sensors[i].active = 1;
+                    PORTB |= 1 << PB3;
+                    audio_enable();
+                    synth_start_note(notes[notes_i + sensors[i].shift]);
+                //}
+        //} else if(sensors[i].active) {
+        } else {
             sensors[i].trigger++;
-            if(sensors[i].trigger > 100) {
-                PORTB &= ~(1 << PB3);
-                synth_stop_note();
+            if(sensors[i].trigger > 10) {
                 sensors[i].active = 0;
                 sensors[i].trigger = 0;
+
+                PORTB &= ~(1 << PB3);
+                audio_disable();
+                synth_stop_note();
                 notes_i = (notes_i + 1) & notes_mask;
             }
         }
@@ -125,9 +127,17 @@ void loop(void) {
 
 void audio_init(void) {
       TCCR0A = (1 << COM0A1) | (1 << WGM01) | (1 << WGM00); 
-      TCCR0B = (1 << CS00);
       OCR0A = 127;
-      DDRB |= (1 << PB0); 
+}
+
+void audio_enable(void) {
+    TCCR0B = (1 << CS00);
+    DDRB |= (1 << PB0); 
+}
+
+void audio_disable(void) {
+    TCCR0B = ~(1 << CS00);
+    DDRB &= ~(1 << PB0); 
 }
 
 uint16_t sampleChargeTime(byte pin, uint8_t samples) {

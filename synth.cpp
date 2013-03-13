@@ -15,14 +15,23 @@ void synth_amplitude(uint8_t amplitude) {
     next_amplitude = amplitude;
 }
 
-void synth_init(void) {
+void synth_enable(void) {
     TCCR1 = (1 << CS11) | (1 << CS00);
     TIMSK = (1 << OCIE1A); 
+}
+
+void synth_disable() {
+    TCCR1 &= ~((1 << CS11) | (1 << CS00));
+    TIMSK &= ~(1 << OCIE1A);
+}
+
+void synth_init(void) {
     OCR1A = 0x0f; // set PWM carrier frequency
     next_amplitude = 0xff; // max volume, plz
 }
 
 void synth_start_note(uint8_t note) {
+    synth_enable();
     next_note = note;
 }
 
@@ -33,6 +42,7 @@ static volatile uint8_t amplitude = 0xff;
 
 // hack to prevent increment
 void synth_stop_note(void) {
+    synth_disable();
     next_note = 0;
     carrier_pos = 0;
 }
