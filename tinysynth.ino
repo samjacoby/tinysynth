@@ -7,7 +7,7 @@
 //      pb3:3 -+   +- 2:pb2
 //      pb4:4 -+   +- 1:pb1
 //            -+---+- 0:pb0 (OC0A)
-//#define NUM_CHANNELS 3
+
 //#define SERIALON
 
 #define NUM_SENSE 3
@@ -62,6 +62,7 @@ void setup(void) {
     DDRB |= (1 << PB3);
     PORTB |= (1 << PB3);
 
+    // initialize sensors
     for(byte i=0; i < NUM_SENSE; i++) {
             DDRB |= 1 << touchPins[i];
             sensors[i].pin = touchPins[i];
@@ -76,6 +77,7 @@ void setup(void) {
 }
 
 /* not for now
+//#define NUM_CHANNELS 3
 typedef struct {
       uint8_t carrier_inc;
       uint8_t carrier_pos;
@@ -86,7 +88,6 @@ typedef struct {
 channel_t channels[NUM_CHANNELS];
 */
 
-//byte notes[] = {10, 14, 18, 22, 26, 30, 34, 38, 130, 140, 150, 160, 170, 180, 190, 200, 42, 45, 47, 50, 58, 69, 81, 86, 90, 95, 98, 102, 110};
 
 byte notes[] = { 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130 };
 
@@ -102,14 +103,13 @@ void loop(void) {
         #endif
         if(n > sensors[i].calibration) { 
                 sensors[i].trigger = 0; 
-                //if(!sensors[i].active) {
+                if(!sensors[i].active) {
                     sensors[i].active = 1;
                     PORTB |= 1 << PB3;
                     audio_enable();
                     synth_start_note(notes[notes_i + sensors[i].shift]);
-                //}
-        //} else if(sensors[i].active) {
-        } else {
+                }
+        } else if(sensors[i].active) {
             sensors[i].trigger++;
             if(sensors[i].trigger > 10) {
                 sensors[i].active = 0;
@@ -145,27 +145,31 @@ uint16_t sampleChargeTime(byte pin, uint8_t samples) {
     uint16_t sum = 0;
     for(int i=0; i<samples; i++) {
         val = chargeTime(pin);
+        // moving average
         sum += ((prev_val * 7) + val) >> 3;
         prev_val = val;
     }
     return sum;
 }
 
-
+//
+// Charge Pin
+//
 byte chargeTime(byte pin) {
 
-    byte mask, i;
-    mask = 1 << pin;
+    byte pinMask, i;
+    pinMask = 1 << pin;
 
-    DDRB &= ~mask; // input
-    PORTB |= mask; // pull-up on
+    DDRB &= ~pinMask; // input
+    PORTB |= pinMask; // pull-up on
 
+    // wait for pin to go high
     for(i=0; i < 16; i++) {
-        if(PINB & mask) break;
+        if(PINB & pinMask) break;
     }
 
-    PORTB &= ~mask; // pull-up off
-    DDRB |= mask; // discharge
+    PORTB &= ~pinMask; // pull-up off
+    DDRB |= pinMask; // discharge (set to output);
 
     return i;
 }
