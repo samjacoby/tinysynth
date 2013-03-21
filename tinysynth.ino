@@ -10,11 +10,12 @@
 
 //#define SERIALON
 
+#define LED PB4
 #define NUM_SENSE 3
 #define SAMPLES 16
-#define TIMEOUT 20000
+#define TIMEOUT 10000 // this is pretty much just a random big number
 
-byte touchPins[] = { PB4, PB2, PB1};
+byte touchPins[] = { PB3, PB2, PB1};
 //byte touchPins[] = { PB1};
 
 #ifdef SERIALON
@@ -28,6 +29,7 @@ typedef struct {
     uint8_t shift;
     uint16_t calibration;
     uint16_t trigger;
+    uint16_t timeout;
 } sense_t; 
 
 sense_t sensors[NUM_SENSE];
@@ -59,8 +61,8 @@ void setup(void) {
     #endif
 
     // led
-    DDRB |= (1 << PB3);
-    PORTB |= (1 << PB3);
+    DDRB |= (1 << LED);
+    PORTB |= (1 << LED);
 
     // initialize sensors
     for(byte i=0; i < NUM_SENSE; i++) {
@@ -68,11 +70,13 @@ void setup(void) {
             sensors[i].pin = touchPins[i];
             sensors[i].active = 0; 
             sensors[i].shift = i << 3; // multiply by eight 
-            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 2;        
+            sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 1;        
             sensors[i].trigger = 0; 
+            sensors[i].timeout = 0; 
     }
 
-    PORTB &= ~(1 << PB3);
+    PORTB &= ~(1 << LED);
+
     synth_amplitude(0xff);
 }
 
@@ -96,26 +100,53 @@ uint8_t notes_mask = 7;
 
 void loop(void) {
     uint16_t n;
+
+    // iterate over each sensor pin
     for(int i=0; i<NUM_SENSE; i++) {
+        // check the sample time
         n = sampleChargeTime(sensors[i].pin, SAMPLES);
         #ifdef SERIALON
         Serial.println(n);
         #endif
+        // if the sample time is larger than the calibration time
         if(n > sensors[i].calibration) { 
-                sensors[i].trigger = 0; 
-                if(!sensors[i].active) {
-                    sensors[i].active = 1;
-                    PORTB |= 1 << PB3;
-                    audio_enable();
-                    synth_start_note(notes[notes_i + sensors[i].shift]);
-                }
-        } else if(sensors[i].active) {
-            sensors[i].trigger++;
-            if(sensors[i].trigger > 10) {
-                sensors[i].active = 0;
-                sensors[i].trigger = 0;
+            // set the trigger to zero    
+            sensors[i].trigger = 0; 
+            sensors[i].timeout += 1; 
 
-                PORTB &= ~(1 << PB3);
+            // autocalibrate if we've been on for awhile
+            if(sensors[i].timeout > TIMEOUT) {
+                sensors[i].calibration = n;
+                sensors[i].timeout = 0; // next iteration should do this, but better safe 
+            }
+
+            // if this the first time that the sensor is being turned on
+            if(!sensors[i].active) {
+                // set it on
+                sensors[i].active = 1;
+                // turn on the LED
+                PORTB |= 1 << LED;
+                // enable audio
+                audio_enable();
+                // and generate note
+                synth_start_note(notes[notes_i + sensors[i].shift]);
+            }
+        // if the sample time is smaller than the calibration time AND
+        // this particular pin is active
+        } else if(sensors[i].active) {
+            // add to the trigger
+            sensors[i].trigger++;
+            // if the trigger is over 10
+            if(sensors[i].trigger > 10) {
+                // set pin inactive
+                sensors[i].active = 0;
+                // set the trigger to 0
+                sensors[i].trigger = 0;
+                // set the timeout to 0
+                sensors[i].timeout = 0;
+                // switch off LED
+                PORTB &= ~(1 << LED);
+                // close down sound
                 audio_disable();
                 synth_stop_note();
                 notes_i = (notes_i + 1) & notes_mask;
