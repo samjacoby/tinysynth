@@ -10,13 +10,12 @@
 
 //#define SERIALON
 
-#define LED PB4
-#define NUM_SENSE 3
+#define NUM_SENSE 2
 #define SAMPLES 16
 #define TIMEOUT 10000 // this is pretty much just a random big number
 
-byte touchPins[] = { PB3, PB2, PB1};
-//byte touchPins[] = { PB1};
+byte touchPins[] = { PB2, PB1};     // the pins that we touch
+byte ledPins[] = { PB3, PB4};       // the pins that light up
 
 #ifdef SERIALON
 #include <SoftwareSerial.h>
@@ -25,6 +24,7 @@ SoftwareSerial Serial(PB2, PB1);
 
 typedef struct {
     uint8_t pin;
+    uint8_t led;
     uint8_t active;
     uint8_t shift;
     uint16_t calibration;
@@ -61,13 +61,14 @@ void setup(void) {
     #endif
 
     // led
-    DDRB |= (1 << LED);
-    PORTB |= (1 << LED);
+    DDRB |= (1 << ledPins[0]) | (1 << ledPins[1]);
+    PORTB |= (1 << ledPins[0]) | (1 << ledPins[1]);
 
     // initialize sensors
     for(byte i=0; i < NUM_SENSE; i++) {
             DDRB |= 1 << touchPins[i];
             sensors[i].pin = touchPins[i];
+            sensors[i].led = ledPins[i];
             sensors[i].active = 0; 
             sensors[i].shift = i << 3; // multiply by eight 
             sensors[i].calibration = sampleChargeTime(sensors[i].pin, SAMPLES) + 1;        
@@ -75,7 +76,7 @@ void setup(void) {
             sensors[i].timeout = 0; 
     }
 
-    PORTB &= ~(1 << LED);
+    PORTB &=  ~((1 << ledPins[0]) | (1 << ledPins[1]));
 
     synth_amplitude(0xff);
 }
@@ -110,8 +111,9 @@ void loop(void) {
         #endif
         // if the sample time is larger than the calibration time
         if(n > sensors[i].calibration) { 
-            // set the trigger to zero    
+            // reset the trigger if we're actuated
             sensors[i].trigger = 0; 
+            // keep track of how long we've been on
             sensors[i].timeout += 1; 
 
             // autocalibrate if we've been on for awhile
@@ -125,7 +127,7 @@ void loop(void) {
                 // set it on
                 sensors[i].active = 1;
                 // turn on the LED
-                PORTB |= 1 << LED;
+                PORTB |= 1 << sensors[i].led;
                 // enable audio
                 audio_enable();
                 // and generate note
@@ -134,9 +136,9 @@ void loop(void) {
         // if the sample time is smaller than the calibration time AND
         // this particular pin is active
         } else if(sensors[i].active) {
-            // add to the trigger
+            // increment trigger
             sensors[i].trigger++;
-            // if the trigger is over 10
+            // if pin has been off for a certain amount of time, turn it off
             if(sensors[i].trigger > 10) {
                 // set pin inactive
                 sensors[i].active = 0;
@@ -145,7 +147,7 @@ void loop(void) {
                 // set the timeout to 0
                 sensors[i].timeout = 0;
                 // switch off LED
-                PORTB &= ~(1 << LED);
+                PORTB &= ~(1 << sensors[i].led);
                 // close down sound
                 audio_disable();
                 synth_stop_note();

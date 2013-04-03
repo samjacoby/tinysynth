@@ -59,6 +59,7 @@ void synth_generate(uint8_t note) {
 }
 
 ISR(TIM1_COMPA_vect) {
+    //if(!synth_ready) return
     synth_generate(next_note); 
     OCR0A = next_sample;
 }
