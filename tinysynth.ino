@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include "synth.h"
+#include "tinysynth.h"
 #define nop()  __asm__ __volatile__("nop")
 
 //                        attiny45
@@ -8,10 +9,8 @@
 //      pb4:4 -+   +- 1:pb1
 //            -+---+- 0:pb0 (OC0A)
 
-//#define SERIALON
-
-#define NUM_SENSE 2
-#define SAMPLES 16
+#define NUM_SENSE 2   // how many sensor pins do we have?
+#define SAMPLES 16    // how many times do we try and detect a touch?
 #define TIMEOUT 10000 // this is pretty much just a random big number
 
 byte touchPins[] = { PB2, PB1};     // the pins that we touch
@@ -20,29 +19,15 @@ byte ledPins[] = { PB3, PB4};       // the pins that light up
 #ifdef SERIALON
 #include <SoftwareSerial.h>
 SoftwareSerial Serial(PB2, PB1);
-#endif
 
-typedef struct {
-    uint8_t pin;
-    uint8_t led;
-    uint8_t active;
-    uint8_t shift;
-    uint16_t calibration;
-    uint16_t trigger;
-    uint16_t timeout;
-} sense_t; 
-
-sense_t sensors[NUM_SENSE];
-
-#ifdef SERIALON
 void serial_init() {
-
     DDRB |= (1 << PB2) | (1 << PB1);
     Serial.begin(4800);
 
 }
 #endif
 
+sense_t sensors[NUM_SENSE];
 
 void sensors_calibrate(void) {
 
@@ -52,17 +37,7 @@ void sensors_calibrate(void) {
 
 }
 
-void setup(void) {
-    audio_init();
-    audio_disable();
-    synth_init();
-    #ifdef SERIALON
-    serial_init();
-    #endif
-
-    // led
-    DDRB |= (1 << ledPins[0]) | (1 << ledPins[1]);
-    PORTB |= (1 << ledPins[0]) | (1 << ledPins[1]);
+void sensor_init() {
 
     // initialize sensors
     for(byte i=0; i < NUM_SENSE; i++) {
@@ -76,23 +51,30 @@ void setup(void) {
             sensors[i].timeout = 0; 
     }
 
-    PORTB &=  ~((1 << ledPins[0]) | (1 << ledPins[1]));
 
-    synth_amplitude(0xff);
+
 }
 
-/* not for now
-//#define NUM_CHANNELS 3
-typedef struct {
-      uint8_t carrier_inc;
-      uint8_t carrier_pos;
-      uint8_t on; 
-      uint8_t off; 
-} channel_t;
+void setup(void) {
+    audio_init();
+    audio_disable();
+    synth_init();
+    #ifdef SERIALON
+    serial_init();
+    #endif
 
-channel_t channels[NUM_CHANNELS];
-*/
+    // enable LEDs
+    DDRB |= (1 << ledPins[0]) | (1 << ledPins[1]);
+    // light em' up
+    PORTB |= (1 << ledPins[0]) | (1 << ledPins[1]);
+    // initialize the touch-sensitive pins
+    sensor_init();
+    // turn LEDs off
+    PORTB &=  ~((1 << ledPins[0]) | (1 << ledPins[1]));
 
+    // set volume of synth
+    synth_amplitude(0xff);
+}
 
 byte notes[] = { 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126, 130 };
 
@@ -104,19 +86,26 @@ void loop(void) {
 
     // iterate over each sensor pin
     for(int i=0; i<NUM_SENSE; i++) {
+
         // check the sample time
         n = sampleChargeTime(sensors[i].pin, SAMPLES);
+
         #ifdef SERIALON
         Serial.println(n);
         #endif
-        // if the sample time is larger than the calibration time
+
+        // if we've detected a touch 
         if(n > sensors[i].calibration) { 
-            // reset the trigger if we're actuated
+
+            // reset the trigger if we're touched
+            // this is a way of kind've filtering
             sensors[i].trigger = 0; 
-            // keep track of how long we've been on
+
+            // keep track of how long we've been on for new calibration
             sensors[i].timeout += 1; 
 
-            // autocalibrate if we've been on for awhile
+            // autocalibrate if we've been touched for awhile
+            // because something has gone wrong!
             if(sensors[i].timeout > TIMEOUT) {
                 sensors[i].calibration = n;
                 sensors[i].timeout = 0; // next iteration should do this, but better safe 
@@ -131,8 +120,18 @@ void loop(void) {
                 // enable audio
                 audio_enable();
                 // and generate note
+                
+                
+                // IMPORTANT.
+                // 
+                // This is where the sounds actually gets made.
+                // Send @synth_start_note a number between 0 and 255  
                 synth_start_note(notes[notes_i + sensors[i].shift]);
+                
+
+
             }
+
         // if the sample time is smaller than the calibration time AND
         // this particular pin is active
         } else if(sensors[i].active) {
@@ -173,6 +172,8 @@ void audio_disable(void) {
     DDRB &= ~(1 << PB0); 
 }
 
+
+// Check a single pin a bunch of times
 uint16_t sampleChargeTime(byte pin, uint8_t samples) {
     byte val, prev_val = 0;
     uint16_t sum = 0;
@@ -188,6 +189,9 @@ uint16_t sampleChargeTime(byte pin, uint8_t samples) {
 //
 // Charge Pin
 //
+// This function times how long it takes for a pin to switch from low to high.
+// That time is correlated with the pin's capacitance, making it a capacitive
+// sensor. 
 byte chargeTime(byte pin) {
 
     byte pinMask, i;
