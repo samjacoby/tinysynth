@@ -5,8 +5,8 @@
 
 //                        attiny45
 //      reset -+---+-  power
-//      pb3:3 -+   +- 2:pb2
-//      pb4:4 -+   +- 1:pb1
+// LED1 pb3:3 -+   +- 2:pb2 TOUCH1
+// LED2 pb4:4 -+   +- 1:pb1 TOUCH2
 //            -+---+- 0:pb0 (OC0A)
 
 #define NUM_SENSE 2   // how many sensor pins do we have?
